@@ -2674,7 +2674,7 @@
     if (curTab === 'crypto' && document.getElementById('tab-crypto') && document.getElementById('tab-crypto').classList.contains('active')) renderCrypto();
   }, 60000);
   // Verification des mises a jour
-  var CURRENT_VERSION = '1.1.9'; // Doit correspondre a @version
+  var CURRENT_VERSION = '1.2.2'; // Doit correspondre a @version
   var RAW_URL = 'https://raw.githubusercontent.com/tarteteambrumaire-debug/stake-rain-notifier/main/stake-rain-notifier.user.js';
   function checkForUpdate() {
     GM_xmlhttpRequest({
