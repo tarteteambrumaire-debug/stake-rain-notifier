@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StakePulse
 // @namespace    https://stake.bet/stakepulse
-// @version      1.2.3
+// @version      1.2.4
 // @description  StakePulse - Rain & Stats tracker pour Stake.bet - by alleluiateam | v1.2.2
 // @author       alleluiateam
 // @match        https://stake.com/*
@@ -2009,7 +2009,12 @@
     if (!recent.length) { el.innerHTML = '<div class="srn-empty">Aucune rain.</div>'; return; }
     el.innerHTML = recent.map(function(e) {
       var time = new Date(e.ts).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
-      var amt = e.amount ? ' - <span style="color:#00d4ff">' + e.amount + ' ' + e.currency + '</span>' : '';
+      var curPrefH = load(SK_CURRENCY, 'usd');
+      var amtStr = '';
+      if (curPrefH === 'eur' && e.eurEach) amtStr = '- <span style="color:#00d4ff">€' + parseFloat(e.eurEach).toFixed(2) + '/joueur</span>';
+      else if (curPrefH === 'usd' && e.usdEach) amtStr = '- <span style="color:#00d4ff">$' + parseFloat(e.usdEach).toFixed(2) + '/joueur</span>';
+      else if (e.amount) amtStr = '- <span style="color:#00d4ff">' + e.amount + ' ' + e.currency + '</span>';
+      var amt = amtStr ? ' ' + amtStr : '';
       var recip = e.recipients.length > 0 ? '<br><span style="color:#8899aa;font-size:11px">' + e.recipients.length + ' joueurs touches</span>' : '';
       return '<div class="srn-hi"><span style="color:#00d4ff;font-weight:600">' + escHtml(e.sender) + '</span>' + amt + ' <span style="color:#8899aa;font-size:11px">- ' + time + '</span>' + recip + '</div>';
     }).join('');
@@ -2051,9 +2056,16 @@
     var monthStart = getMonthStart(new Date()).getTime();
     var weekRains  = myRains.filter(function(e) { return e.ts >= weekStart; });
     var monthRains = myRains.filter(function(e) { return e.ts >= monthStart; });
-    var weekTotal  = weekRains.reduce(function(s, e) { return s + (e.amount || 0); }, 0) + offset.week;
-    var monthTotal = monthRains.reduce(function(s, e) { return s + (e.amount || 0); }, 0) + offset.month;
-    var allTotal   = myRains.reduce(function(s, e) { return s + (e.amount || 0); }, 0) + offset.allTime;
+    var curPrefM = load(SK_CURRENCY, 'usd');
+    var symM = curPrefM === 'eur' ? '€' : '$';
+    function getAmt(e) {
+      if (curPrefM === 'eur' && e.eurEach) return parseFloat(e.eurEach);
+      if (curPrefM === 'usd' && e.usdEach) return parseFloat(e.usdEach);
+      return e.amount || 0;
+    }
+    var weekTotal  = weekRains.reduce(function(s, e) { return s + getAmt(e); }, 0) + offset.week;
+    var monthTotal = monthRains.reduce(function(s, e) { return s + getAmt(e); }, 0) + offset.month;
+    var allTotal   = myRains.reduce(function(s, e) { return s + getAmt(e); }, 0) + offset.allTime;
     var bestWeek = 0, bestWeekLabel = '-';
     var weekMap = {};
     myRains.forEach(function(e) {
@@ -2085,16 +2097,16 @@
     el.innerHTML = [
       '<div class="srn-sec-title">Objectif semaine</div>',
       '<div class="srn-stat-card">',
-        '<div style="display:flex;justify-content:space-between"><span style="color:#fff;font-size:16px;font-weight:800">' + weekTotal.toFixed(2) + '\u20ac</span><span style="color:' + pctColor + ';font-weight:700">' + pct + '%</span></div>',
+        '<div style="display:flex;justify-content:space-between"><span style="color:#fff;font-size:16px;font-weight:800">' + weekTotal.toFixed(2) + symM + '</span><span style="color:' + pctColor + ';font-weight:700">' + pct + '%</span></div>',
         '<div class="srn-progress-bar"><div class="srn-progress-fill" style="width:' + pct + '%"></div></div>',
-        '<div style="color:#8899aa;font-size:10px">Objectif : ' + WEEKLY_GOAL + '\u20ac - Reste : ' + Math.max(0, WEEKLY_GOAL - weekTotal).toFixed(2) + '\u20ac</div>',
+        '<div style="color:#8899aa;font-size:10px">Objectif : ' + WEEKLY_GOAL + symM + ' - Reste : ' + Math.max(0, WEEKLY_GOAL - weekTotal).toFixed(2) + symM + '</div>',
       '</div>',
       '<div class="srn-sec-title">Mes statistiques</div>',
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">',
-        '<div class="srn-stat-card"><div class="srn-stat-card-title">Ce mois</div><div class="srn-stat-card-val">' + monthTotal.toFixed(2) + '\u20ac</div><div class="srn-stat-card-sub">' + (monthRains.length + offset.monthCount) + ' rain' + ((monthRains.length + offset.monthCount) > 1 ? 's' : '') + '</div></div>',
-        '<div class="srn-stat-card"><div class="srn-stat-card-title">All-time</div><div class="srn-stat-card-val">' + allTotal.toFixed(2) + '\u20ac</div><div class="srn-stat-card-sub">' + (myRains.length + offset.allTimeCount) + ' rain' + ((myRains.length + offset.allTimeCount) > 1 ? 's' : '') + '</div></div>',
-        '<div class="srn-stat-card"><div class="srn-stat-card-title">Meilleure sem.</div><div class="srn-stat-card-val">' + bestWeek.toFixed(2) + '\u20ac</div><div class="srn-stat-card-sub">Sem. du ' + bestWeekLabel + '</div></div>',
-        '<div class="srn-stat-card"><div class="srn-stat-card-title">Moy. par rain</div><div class="srn-stat-card-val">' + ((myRains.length + offset.allTimeCount) > 0 ? (allTotal / (myRains.length + offset.allTimeCount)).toFixed(2) : '0.00') + '\u20ac</div><div class="srn-stat-card-sub">sur ' + myRains.length + ' rain' + (myRains.length > 1 ? 's' : '') + '</div></div>',
+        '<div class="srn-stat-card"><div class="srn-stat-card-title">Ce mois</div><div class="srn-stat-card-val">' + monthTotal.toFixed(2) + symM + '</div><div class="srn-stat-card-sub">' + (monthRains.length + offset.monthCount) + ' rain' + ((monthRains.length + offset.monthCount) > 1 ? 's' : '') + '</div></div>',
+        '<div class="srn-stat-card"><div class="srn-stat-card-title">All-time</div><div class="srn-stat-card-val">' + allTotal.toFixed(2) + symM + '</div><div class="srn-stat-card-sub">' + (myRains.length + offset.allTimeCount) + ' rain' + ((myRains.length + offset.allTimeCount) > 1 ? 's' : '') + '</div></div>',
+        '<div class="srn-stat-card"><div class="srn-stat-card-title">Meilleure sem.</div><div class="srn-stat-card-val">' + bestWeek.toFixed(2) + symM + '</div><div class="srn-stat-card-sub">Sem. du ' + bestWeekLabel + '</div></div>',
+        '<div class="srn-stat-card"><div class="srn-stat-card-title">Moy. par rain</div><div class="srn-stat-card-val">' + ((myRains.length + offset.allTimeCount) > 0 ? (allTotal / (myRains.length + offset.allTimeCount)).toFixed(2) : '0.00') + symM + '</div><div class="srn-stat-card-sub">sur ' + myRains.length + ' rain' + (myRains.length > 1 ? 's' : '') + '</div></div>',
       '</div>',
       '<div class="srn-sec-title">8 dernieres semaines</div>',
       '<div style="display:flex;align-items:flex-end;gap:3px;height:80px;margin-bottom:4px">' + barsHtml + '</div>',
@@ -2700,7 +2712,7 @@
     if (curTab === 'crypto' && document.getElementById('tab-crypto') && document.getElementById('tab-crypto').classList.contains('active')) renderCrypto();
   }, 60000);
   // Verification des mises a jour
-  var CURRENT_VERSION = '1.2.3'; // Doit correspondre a @version
+  var CURRENT_VERSION = '1.2.4'; // Doit correspondre a @version
   var RAW_URL = 'https://raw.githubusercontent.com/tarteteambrumaire-debug/stake-rain-notifier/main/stake-rain-notifier.user.js';
   function checkForUpdate() {
     GM_xmlhttpRequest({
