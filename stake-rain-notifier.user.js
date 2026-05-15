@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StakePulse
 // @namespace    https://stake.bet/stakepulse
-// @version      1.2.0
+// @version      1.2.1
 // @description  StakePulse - Rain & Stats tracker pour Stake.bet - by alleluiateam | v1.2.0
 // @author       alleluiateam
 // @match        https://stake.com/*
@@ -86,7 +86,7 @@
   }
   function save(key, value) { GM_setValue(key, JSON.stringify(value)); }
   // Charge les mots custom et les fusionne avec WORD_RULES
-  var FIREBASE_URL = 'https://alerte-rain-default-rtdb.europe-west1.firebasedatabase.app';
+  var FIREBASE_URL = 'https://stakepulse-v2.europe-west1.firebasedatabase.app';
   var FIREBASE_KEYS = ['srn_rain_log', 'srn_rankings', 'srn_wordcount', 'srn_emoji_count', 'srn_multip', 'srn_wager'];
   var fbSyncTimer = null;
   var lastFbSync = 0;
@@ -579,27 +579,20 @@
   }
   function processMessage(text, sender) {
     if (!text || text.length < 2) return;
-    // PRIORITE 1 : extraire le pseudo auteur depuis le debut du texte.
-    // Format Stake : "Poulpe10: @alleluiateam ..." — le pseudo est dans les 30 premiers chars.
-    // On cherche dans les 30 premiers caracteres (apres trim) pour gerer espaces/chars invisibles.
     if (text) {
       var trimmed = text.replace(/^[\s\u00a0\u200b\u200c\u200d\ufeff]+/, '');
       var m = trimmed.match(/^([A-Za-z0-9_]{2,25}):\s/);
       if (m) { sender = m[1]; }
       else {
-        // 2e chance : le pseudo peut etre apres un emoji ou un caractere non-alphanum en debut
         var m2 = text.match(/(?:^|[^A-Za-z0-9_])([A-Za-z0-9_]{2,25}):\s/);
         if (m2 && text.indexOf(m2[1] + ':') < 35) sender = m2[1];
       }
     }
+    // Wordcount et wager toujours actifs
     trackWordCount(text, sender);
     var key = text.substring(0, 100);
     if (isDuplicate(key)) return;
-    checkAndNotifyMention(text, sender);
-    if (looksLikeRain(text)) {
-      var parsed = parseRainMessage(text);
-      recordRain(sender, parsed);
-    }
+    // Rain et mentions gérées par le bridge — on ne les traite plus ici
   }
   function interceptWebSocket() {
     // Injection dans la page via <script> pour intercepter avant les WS natifs
@@ -3303,7 +3296,72 @@
   function init() {
     loadSavedConfig();
     loadCustomWords();
-    interceptWebSocket();
+
+  // ── Bridge WebSocket local ───────────────────────────────────────────────────
+  var bridgeWS = null;
+  var bridgeConnected = false;
+
+  function connectBridge() {
+    try {
+      bridgeWS = new WebSocket('ws://localhost:3001');
+
+      bridgeWS.addEventListener('open', function() {
+        bridgeConnected = true;
+        console.log('[StakePulse] Bridge connecte');
+      });
+
+      bridgeWS.addEventListener('close', function() {
+        bridgeConnected = false;
+        console.log('[StakePulse] Bridge deconnecte — reconnexion dans 5s');
+        setTimeout(connectBridge, 5000);
+      });
+
+      bridgeWS.addEventListener('error', function() {
+        bridgeConnected = false;
+      });
+
+      bridgeWS.addEventListener('message', function(e) {
+        try {
+          var data = JSON.parse(e.data);
+          if (!data || !data.type) return;
+
+          var chatPref = load(SK_CHAT_PREF, '');
+
+          // Rain : seulement si c'est le chat préféré de l'utilisateur
+          if (data.type === 'rain') {
+            if (chatPref && data.chatId !== chatPref) return;
+            var sender = data.sender || 'rain-bot';
+            var nb     = data.recipients ? data.recipients.length : 0;
+            var parsed = {
+              amount:         nb > 0 ? data.amount / nb : data.amount,
+              currency:       data.currency || '',
+              recipients:     data.recipients || [],
+              raw:            sender + ' a donne a ' + nb + ' utilisateurs chacun: ' + (data.recipients || []).join(', '),
+              senderFromText: sender
+            };
+            recordRain(sender, parsed);
+          }
+
+          // Mention : seulement si notre pseudo est tagué
+          if (data.type === 'text') {
+            var myUser = (CONFIG.YOUR_USERNAME || '').toLowerCase();
+            if (!myUser) return;
+            var text = data.text || '';
+            if (text.toLowerCase().indexOf('@' + myUser) >= 0) {
+              checkAndNotifyMention(text, data.sender);
+            }
+          }
+
+        } catch(err) {}
+      });
+
+    } catch(e) {
+      console.log('[StakePulse] Bridge non disponible');
+    }
+  }
+
+  connectBridge();
+  interceptWebSocket();
     var start = function() {
       buildPanel();
       // Afficher le setup si premiere installation
