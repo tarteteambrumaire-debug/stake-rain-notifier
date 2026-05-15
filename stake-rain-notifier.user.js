@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         StakePulse
 // @namespace    https://stake.bet/stakepulse
-// @version      1.2.1
-// @description  StakePulse - Rain & Stats tracker pour Stake.bet - by alleluiateam | v1.2.0
+// @version      1.2.2
+// @description  StakePulse - Rain & Stats tracker pour Stake.bet - by alleluiateam | v1.2.2
 // @author       alleluiateam
 // @match        https://stake.com/*
 // @match        https://stake.bet/*
