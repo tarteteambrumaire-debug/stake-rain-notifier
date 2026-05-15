@@ -28,7 +28,6 @@
 // @connect      api.telegram.org
 // @connect      api.exchangerate-api.com
 // @connect      api.coingecko.com
-// @connect      alerte-rain-default-rtdb.europe-west1.firebasedatabase.app
 // @connect      stakepulse-v2.europe-west1.firebasedatabase.app
 // @connect      publicbackendstakeslots-production.up.railway.app
 // @connect      raw.githubusercontent.com
