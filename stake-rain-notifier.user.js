@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StakePulse
 // @namespace    https://stake.bet/stakepulse
-// @version      1.2.2
+// @version      1.2.3
 // @description  StakePulse - Rain & Stats tracker pour Stake.bet - by alleluiateam | v1.2.2
 // @author       alleluiateam
 // @match        https://stake.com/*
@@ -75,6 +75,7 @@
   var SK_SETUP_DONE = 'srn_setup_done_v2';
   var SK_LANGUAGE   = 'srn_language';
   var SK_CHAT_PREF  = 'srn_chat_pref';
+  var SK_CURRENCY   = 'srn_currency'; // 'usd' ou 'eur'
   var SK_RAINERS = 'srn_rainers';
   var DEDUP_TTL     = 4 * 60 * 60 * 1000;
   var DELETED_TTL   = 7 * 24 * 60 * 60 * 1000;
@@ -449,7 +450,7 @@
     // Priorite au sender extrait du texte (plus fiable que le DOM)
     if (parsed.senderFromText) sender = parsed.senderFromText;
     var log = load(SK.RAIN_LOG, []);
-    var entry = { ts: now, date: new Date().toISOString(), sender: sender || 'Inconnu', amount: parsed.amount, currency: parsed.currency, recipients: parsed.recipients, raw: parsed.raw.substring(0, 300) };
+    var entry = { ts: now, date: new Date().toISOString(), sender: sender || 'Inconnu', amount: parsed.amount, currency: parsed.currency, recipients: parsed.recipients, raw: parsed.raw.substring(0, 300), usdEach: parsed.usdEach || null, usdTotal: parsed.usdTotal || null, eurEach: parsed.eurEach || null, eurTotal: parsed.eurTotal || null };
     log.push(entry);
     if (log.length > 1000) log.splice(0, log.length - 1000);
     save(SK.RAIN_LOG, log);
@@ -511,17 +512,31 @@
     var now = new Date();
     var weekStart = getWeekStart(now).getTime();
     var monthStart = getMonthStart(now).getTime();
+    var usdEach = entry.usdEach ? parseFloat(entry.usdEach) : null;
+    var eurEach = entry.eurEach ? parseFloat(entry.eurEach) : null;
     entry.recipients.forEach(function(username) {
       if (!rankings[username]) rankings[username] = {
-        weekly:  { count: 0, totalAmount: 0, currency: entry.currency, _start: weekStart },
-        monthly: { count: 0, totalAmount: 0, currency: entry.currency, _start: monthStart },
-        allTime: { count: 0, totalAmount: 0, currency: entry.currency },
+        weekly:  { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: weekStart },
+        monthly: { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: monthStart },
+        allTime: { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency },
       };
       var p = rankings[username];
-      if (!p.weekly._start  || p.weekly._start  < weekStart)  p.weekly  = { count: 0, totalAmount: 0, currency: entry.currency, _start: weekStart };
-      if (!p.monthly._start || p.monthly._start < monthStart) p.monthly = { count: 0, totalAmount: 0, currency: entry.currency, _start: monthStart };
+      if (!p.weekly._start  || p.weekly._start  < weekStart)  p.weekly  = { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: weekStart };
+      if (!p.monthly._start || p.monthly._start < monthStart) p.monthly = { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: monthStart };
       p.weekly.count++; p.monthly.count++; p.allTime.count++;
-      if (entry.amount) { p.weekly.totalAmount += entry.amount; p.monthly.totalAmount += entry.amount; p.allTime.totalAmount += entry.amount; }
+      if (entry.amount) {
+        p.weekly.totalAmount  += entry.amount; p.monthly.totalAmount  += entry.amount; p.allTime.totalAmount  += entry.amount;
+      }
+      if (usdEach) {
+        p.weekly.totalUsd  = (p.weekly.totalUsd  || 0) + usdEach;
+        p.monthly.totalUsd = (p.monthly.totalUsd || 0) + usdEach;
+        p.allTime.totalUsd = (p.allTime.totalUsd || 0) + usdEach;
+      }
+      if (eurEach) {
+        p.weekly.totalEur  = (p.weekly.totalEur  || 0) + eurEach;
+        p.monthly.totalEur = (p.monthly.totalEur || 0) + eurEach;
+        p.allTime.totalEur = (p.allTime.totalEur || 0) + eurEach;
+      }
     });
     save(SK.RANKINGS, rankings);
   }
@@ -1394,6 +1409,10 @@
             '<button class="srn-pbtn" data-period="monthly">Mois</button>',
             '<button class="srn-pbtn" data-period="allTime">Tout temps</button>',
           '</div>',
+          '<div style="display:flex;gap:5px;margin-bottom:8px;justify-content:flex-end">',
+            '<button id="srn-cur-usd" style="padding:3px 10px;border-radius:6px;border:1px solid #00d4ff;background:#00d4ff22;color:#00d4ff;cursor:pointer;font-size:11px;font-weight:700">$ USD</button>',
+            '<button id="srn-cur-eur" style="padding:3px 10px;border-radius:6px;border:1px solid #1e3a4a;background:transparent;color:#8899aa;cursor:pointer;font-size:11px;font-weight:700">€ EUR</button>',
+          '</div>',
           '<ul class="srn-rank-list" id="srn-rl"></ul>',
         '</div>',
         // Historique
@@ -1950,12 +1969,19 @@
     var allTop = getTopN(rankPeriod, 9999);
     var me     = CONFIG.YOUR_USERNAME ? CONFIG.YOUR_USERNAME.toLowerCase() : null;
     if (!top.length) { list.innerHTML = '<li><span class="srn-empty">Aucune rain pour cette periode.</span></li>'; return; }
+    var curPref = load(SK_CURRENCY, 'usd');
     function makeRow(p, i, isMe) {
       var medals = ['\uD83E\uDD47', '\uD83E\uDD48', '\uD83E\uDD49'];
       var pos = medals[i] || (i+1) + '.';
       var posCls = ['g','s','b'][i] ? ' class="srn-pos ' + ['g','s','b'][i] + '"' : ' class="srn-pos"';
-      var isEuro = (p.currency === '\u20ac' || p.currency === 'EUR');
-      var amtStr = p.totalAmount > 0 ? (isEuro ? p.totalAmount.toFixed(2) + '\u20ac' : p.totalAmount.toFixed(5) + ' ' + (p.currency || '')) : '';
+      var amtStr = '';
+      if (curPref === 'eur' && p.totalEur > 0) {
+        amtStr = p.totalEur.toFixed(2) + '\u20ac';
+      } else if (curPref === 'usd' && p.totalUsd > 0) {
+        amtStr = '$' + p.totalUsd.toFixed(2);
+      } else if (p.totalAmount > 0) {
+        amtStr = p.totalAmount.toFixed(4) + ' ' + (p.currency || '');
+      }
       var amt = amtStr ? '<span style="color:#00d4ff;font-weight:700;font-size:11px;background:#00d4ff11;border-radius:6px;padding:2px 7px">' + amtStr + '</span>' : '';
       var nameStyle = isMe ? 'color:#fff;font-weight:800;text-shadow:0 0 8px #00d4ff88' : '';
       var meBadge = isMe ? ' <span style="color:#00d4ff;font-size:10px;font-weight:700">< MOI</span>' : '';
@@ -2674,7 +2700,7 @@
     if (curTab === 'crypto' && document.getElementById('tab-crypto') && document.getElementById('tab-crypto').classList.contains('active')) renderCrypto();
   }, 60000);
   // Verification des mises a jour
-  var CURRENT_VERSION = '1.2.2'; // Doit correspondre a @version
+  var CURRENT_VERSION = '1.2.3'; // Doit correspondre a @version
   var RAW_URL = 'https://raw.githubusercontent.com/tarteteambrumaire-debug/stake-rain-notifier/main/stake-rain-notifier.user.js';
   function checkForUpdate() {
     GM_xmlhttpRequest({
@@ -3337,7 +3363,11 @@
               currency:       data.currency || '',
               recipients:     data.recipients || [],
               raw:            sender + ' a donne a ' + nb + ' utilisateurs chacun: ' + (data.recipients || []).join(', '),
-              senderFromText: sender
+              senderFromText: sender,
+              usdEach:        data.usdEach  || null,
+              usdTotal:       data.usdTotal || null,
+              eurEach:        data.eurEach  || null,
+              eurTotal:       data.eurTotal || null,
             };
             recordRain(sender, parsed);
           }
