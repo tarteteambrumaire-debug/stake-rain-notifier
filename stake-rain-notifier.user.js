@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StakePulse
 // @namespace    https://stake.bet/stakepulse
-// @version      1.3.1
+// @version      1.3.2
 // @description  StakePulse - Rain & Stats tracker pour Stake.bet - by alleluiateam | v1.2.2
 // @author       alleluiateam
 // @match        https://stake.com/*
@@ -1457,12 +1457,8 @@
           '<div id="srn-word-content"></div>',
           '<div id="srn-word-detail" style="margin-top:8px;display:none"></div>',
           '<div class="srn-sec-title" style="margin-top:12px">Ajouter un mot</div>',
-          '<div style="display:flex;gap:5px;margin-bottom:5px">',
-            '<input type="text" id="srn-cw-id" placeholder="id (ex: gg)" style="flex:1;background:#162330;border:1px solid #1e3a4a;border-radius:6px;color:#fff;padding:4px 8px;font-size:11px" />',
-            '<input type="text" id="srn-cw-label" placeholder="label (ex: GG)" style="flex:1;background:#162330;border:1px solid #1e3a4a;border-radius:6px;color:#fff;padding:4px 8px;font-size:11px" />',
-          '</div>',
           '<div style="display:flex;gap:5px">',
-            '<input type="text" id="srn-cw-pattern" placeholder="mot a detecter" style="flex:1;background:#162330;border:1px solid #1e3a4a;border-radius:6px;color:#fff;padding:4px 8px;font-size:11px" />',
+            '<input type="text" id="srn-cw-pattern" placeholder="Ex: rip, gg, glissade..." style="flex:1;background:#162330;border:1px solid #1e3a4a;border-radius:6px;color:#fff;padding:4px 8px;font-size:11px" />',
             '<button data-srn="addCustomWord" style="padding:4px 10px;border-radius:6px;border:1px solid #00d4ff55;background:#00d4ff11;color:#00d4ff;cursor:pointer;font-size:11px;font-weight:600">+ Add</button>',
           '</div>',
           '<div id="srn-custom-words-list" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px"></div>',
@@ -2779,7 +2775,7 @@
     if (curTab === 'crypto' && document.getElementById('tab-crypto') && document.getElementById('tab-crypto').classList.contains('active')) renderCrypto();
   }, 60000);
   // Verification des mises a jour
-  var CURRENT_VERSION = '1.3.1'; // Doit correspondre a @version
+  var CURRENT_VERSION = '1.3.2'; // Doit correspondre a @version
   var RAW_URL = 'https://raw.githubusercontent.com/tarteteambrumaire-debug/stake-rain-notifier/main/stake-rain-notifier.user.js';
   function checkForUpdate() {
     GM_xmlhttpRequest({
@@ -3124,9 +3120,9 @@
     },
     removeKeyword: function(i) { CONFIG.WATCH_KEYWORDS.splice(i, 1); saveKeywords(); renderKeywords(); },
     addCustomWord: function() {
-      var id  = (document.getElementById('srn-cw-id').value || '').trim();
-      var lbl = (document.getElementById('srn-cw-label').value || '').trim();
       var pat = (document.getElementById('srn-cw-pattern').value || '').trim();
+      var id  = pat.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20);
+      var lbl = pat.charAt(0).toUpperCase() + pat.slice(1);
       if (!id || !lbl || !pat) return;
       try {
         var regex = new RegExp(pat, 'i');
@@ -3136,8 +3132,6 @@
           save(SK_CUSTOMWORDS, custom);
           WORD_RULES.push({ id: id, label: lbl, pattern: regex, senderFilter: null, custom: true });
         }
-        document.getElementById('srn-cw-id').value = '';
-        document.getElementById('srn-cw-label').value = '';
         document.getElementById('srn-cw-pattern').value = '';
         renderCustomWordsList(); renderModeration();
       } catch(e) { alert('Pattern invalide'); }
