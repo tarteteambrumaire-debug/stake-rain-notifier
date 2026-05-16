@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StakePulse
 // @namespace    https://stake.bet/stakepulse
-// @version      1.3.4
+// @version      1.3.5
 // @description  StakePulse - Rain & Stats tracker pour Stake.bet - by alleluiateam | v1.2.2
 // @author       alleluiateam
 // @match        https://stake.com/*
@@ -547,7 +547,7 @@
         return true;
       })
       .map(function(e) { return Object.assign({ username: e[0] }, e[1][period]); })
-      .sort(function(a, b) { return (b.totalAmount - a.totalAmount) || (b.count - a.count); })
+      .sort(function(a, b) { var cur = load(SK_CURRENCY, 'usd'); var aVal = (cur==='eur'&&b.totalEur) ? (a.totalEur||0) : (cur==='usd'&&b.totalUsd) ? (a.totalUsd||0) : (a.totalAmount||0); var bVal = (cur==='eur'&&b.totalEur) ? (b.totalEur||0) : (cur==='usd'&&b.totalUsd) ? (b.totalUsd||0) : (b.totalAmount||0); return (bVal - aVal) || (b.count - a.count); })
       .slice(0, n);
   }
   function sendRankingToTelegram(period) {
@@ -2775,7 +2775,7 @@
     if (curTab === 'crypto' && document.getElementById('tab-crypto') && document.getElementById('tab-crypto').classList.contains('active')) renderCrypto();
   }, 60000);
   // Verification des mises a jour
-  var CURRENT_VERSION = '1.3.4'; // Doit correspondre a @version
+  var CURRENT_VERSION = '1.3.5'; // Doit correspondre a @version
   var RAW_URL = 'https://raw.githubusercontent.com/tarteteambrumaire-debug/stake-rain-notifier/main/stake-rain-notifier.user.js';
   function checkForUpdate() {
     GM_xmlhttpRequest({
