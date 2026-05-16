@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StakePulse
 // @namespace    https://stake.bet/stakepulse
-// @version      1.2.6
+// @version      1.2.7
 // @description  StakePulse - Rain & Stats tracker pour Stake.bet - by alleluiateam | v1.2.2
 // @author       alleluiateam
 // @match        https://stake.com/*
@@ -457,7 +457,7 @@
     updateRankings(entry);
     // Sauvegarde aussi le sender dans SK_RAINERS
     var rainers = load(SK_RAINERS, []);
-    rainers.push({ ts: entry.ts, sender: entry.sender, amount: entry.amount, currency: entry.currency });
+    rainers.push({ ts: entry.ts, sender: entry.sender, amount: entry.amount, currency: entry.currency, usdTotal: entry.usdTotal || null, eurTotal: entry.eurTotal || null });
     if (rainers.length > 2000) rainers = rainers.slice(-2000);
     save(SK_RAINERS, rainers);
     // Notifie chaque destinataire via Firebase
@@ -2801,7 +2801,7 @@
     if (curTab === 'crypto' && document.getElementById('tab-crypto') && document.getElementById('tab-crypto').classList.contains('active')) renderCrypto();
   }, 60000);
   // Verification des mises a jour
-  var CURRENT_VERSION = '1.2.6'; // Doit correspondre a @version
+  var CURRENT_VERSION = '1.2.7'; // Doit correspondre a @version
   var RAW_URL = 'https://raw.githubusercontent.com/tarteteambrumaire-debug/stake-rain-notifier/main/stake-rain-notifier.user.js';
   function checkForUpdate() {
     GM_xmlhttpRequest({
