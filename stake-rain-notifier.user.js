@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StakePulse
 // @namespace    https://stake.bet/stakepulse
-// @version      1.3.3
+// @version      1.3.4
 // @description  StakePulse - Rain & Stats tracker pour Stake.bet - by alleluiateam | v1.2.2
 // @author       alleluiateam
 // @match        https://stake.com/*
@@ -2775,7 +2775,7 @@
     if (curTab === 'crypto' && document.getElementById('tab-crypto') && document.getElementById('tab-crypto').classList.contains('active')) renderCrypto();
   }, 60000);
   // Verification des mises a jour
-  var CURRENT_VERSION = '1.3.3'; // Doit correspondre a @version
+  var CURRENT_VERSION = '1.3.4'; // Doit correspondre a @version
   var RAW_URL = 'https://raw.githubusercontent.com/tarteteambrumaire-debug/stake-rain-notifier/main/stake-rain-notifier.user.js';
   function checkForUpdate() {
     GM_xmlhttpRequest({
@@ -3443,9 +3443,14 @@
 
           var chatPref = load(SK_CHAT_PREF, '');
 
-          // Rain : seulement si c'est le chat préféré de l'utilisateur
+          // Rain : seulement si c'est le chat préféré (ou import qui passe tout)
           if (data.type === 'rain') {
             if (chatPref && data.chatId !== chatPref) return;
+          } else if (data.type === 'import') {
+            // Import : on accepte tous les chats, pas de filtre
+          }
+
+          if (data.type === 'rain' || data.type === 'import') {
             var sender = data.sender || 'rain-bot';
             var nb     = data.recipients ? data.recipients.length : 0;
             var parsed = {
