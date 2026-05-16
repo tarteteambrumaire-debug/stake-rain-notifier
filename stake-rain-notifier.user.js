@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StakePulse
 // @namespace    https://stake.bet/stakepulse
-// @version      1.2.4
+// @version      1.2.5
 // @description  StakePulse - Rain & Stats tracker pour Stake.bet - by alleluiateam | v1.2.2
 // @author       alleluiateam
 // @match        https://stake.com/*
@@ -1965,6 +1965,23 @@
   function renderRanking() {
     var list = document.getElementById('srn-rl');
     if (!list) return;
+
+    var curBtn = document.getElementById('srn-cur-usd');
+    var eurBtn = document.getElementById('srn-cur-eur');
+    function applyCurStyle(cur) {
+      if (curBtn) { curBtn.style.background = cur === 'usd' ? '#00d4ff22' : 'transparent'; curBtn.style.borderColor = cur === 'usd' ? '#00d4ff' : '#1e3a4a'; curBtn.style.color = cur === 'usd' ? '#00d4ff' : '#8899aa'; }
+      if (eurBtn) { eurBtn.style.background = cur === 'eur' ? '#00d4ff22' : 'transparent'; eurBtn.style.borderColor = cur === 'eur' ? '#00d4ff' : '#1e3a4a'; eurBtn.style.color = cur === 'eur' ? '#00d4ff' : '#8899aa'; }
+    }
+    if (curBtn && !curBtn._l) {
+      curBtn._l = true;
+      curBtn.addEventListener('click', function() { save(SK_CURRENCY, 'usd'); applyCurStyle('usd'); renderRanking(); });
+    }
+    if (eurBtn && !eurBtn._l) {
+      eurBtn._l = true;
+      eurBtn.addEventListener('click', function() { save(SK_CURRENCY, 'eur'); applyCurStyle('eur'); renderRanking(); });
+    }
+    applyCurStyle(load(SK_CURRENCY, 'usd'));
+
     var top    = getTopN(rankPeriod, 10);
     var allTop = getTopN(rankPeriod, 9999);
     var me     = CONFIG.YOUR_USERNAME ? CONFIG.YOUR_USERNAME.toLowerCase() : null;
@@ -2712,7 +2729,7 @@
     if (curTab === 'crypto' && document.getElementById('tab-crypto') && document.getElementById('tab-crypto').classList.contains('active')) renderCrypto();
   }, 60000);
   // Verification des mises a jour
-  var CURRENT_VERSION = '1.2.4'; // Doit correspondre a @version
+  var CURRENT_VERSION = '1.2.5'; // Doit correspondre a @version
   var RAW_URL = 'https://raw.githubusercontent.com/tarteteambrumaire-debug/stake-rain-notifier/main/stake-rain-notifier.user.js';
   function checkForUpdate() {
     GM_xmlhttpRequest({
