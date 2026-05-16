@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         StakePulse
 // @namespace    https://stake.bet/stakepulse
-// @version      1.2.5
+// @version      1.2.6
 // @description  StakePulse - Rain & Stats tracker pour Stake.bet - by alleluiateam | v1.2.2
 // @author       alleluiateam
 // @match        https://stake.com/*
@@ -514,25 +514,31 @@
     var monthStart = getMonthStart(now).getTime();
     var usdEach = entry.usdEach ? parseFloat(entry.usdEach) : null;
     var eurEach = entry.eurEach ? parseFloat(entry.eurEach) : null;
+    var dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     entry.recipients.forEach(function(username) {
       if (!rankings[username]) rankings[username] = {
+        daily:   { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: dayStart },
         weekly:  { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: weekStart },
         monthly: { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: monthStart },
         allTime: { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency },
       };
       var p = rankings[username];
-      if (!p.weekly._start  || p.weekly._start  < weekStart)  p.weekly  = { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: weekStart };
-      if (!p.monthly._start || p.monthly._start < monthStart) p.monthly = { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: monthStart };
-      p.weekly.count++; p.monthly.count++; p.allTime.count++;
+      if (!p.daily   || !p.daily._start   || p.daily._start   < dayStart)   p.daily   = { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: dayStart };
+      if (!p.weekly  || !p.weekly._start  || p.weekly._start  < weekStart)  p.weekly  = { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: weekStart };
+      if (!p.monthly || !p.monthly._start || p.monthly._start < monthStart) p.monthly = { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: entry.currency, _start: monthStart };
+      p.daily.count++; p.weekly.count++; p.monthly.count++; p.allTime.count++;
       if (entry.amount) {
-        p.weekly.totalAmount  += entry.amount; p.monthly.totalAmount  += entry.amount; p.allTime.totalAmount  += entry.amount;
+        p.daily.totalAmount   += entry.amount; p.weekly.totalAmount  += entry.amount;
+        p.monthly.totalAmount += entry.amount; p.allTime.totalAmount += entry.amount;
       }
       if (usdEach) {
+        p.daily.totalUsd   = (p.daily.totalUsd   || 0) + usdEach;
         p.weekly.totalUsd  = (p.weekly.totalUsd  || 0) + usdEach;
         p.monthly.totalUsd = (p.monthly.totalUsd || 0) + usdEach;
         p.allTime.totalUsd = (p.allTime.totalUsd || 0) + usdEach;
       }
       if (eurEach) {
+        p.daily.totalEur   = (p.daily.totalEur   || 0) + eurEach;
         p.weekly.totalEur  = (p.weekly.totalEur  || 0) + eurEach;
         p.monthly.totalEur = (p.monthly.totalEur || 0) + eurEach;
         p.allTime.totalEur = (p.allTime.totalEur || 0) + eurEach;
@@ -543,16 +549,21 @@
   function getTopN(period, n) {
     var rankings = load(SK.RANKINGS, {});
     var now = new Date();
+    var dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     var weekStart = getWeekStart(now).getTime();
     var monthStart = getMonthStart(now).getTime();
     return Object.entries(rankings)
       .filter(function(e) {
         var p = e[1];
-        if (period === 'weekly')  return p.weekly._start  >= weekStart;
-        if (period === 'monthly') return p.monthly._start >= monthStart;
+        if (period === 'daily')   return p.daily   && p.daily._start   >= dayStart;
+        if (period === 'weekly')  return p.weekly   && p.weekly._start  >= weekStart;
+        if (period === 'monthly') return p.monthly  && p.monthly._start >= monthStart;
         return true;
       })
-      .map(function(e) { return Object.assign({ username: e[0] }, e[1][period]); })
+      .map(function(e) {
+        var pd = e[1][period] || { count: 0, totalAmount: 0, totalUsd: 0, totalEur: 0, currency: '' };
+        return Object.assign({ username: e[0] }, pd);
+      })
       .sort(function(a, b) { return (b.totalAmount - a.totalAmount) || (b.count - a.count); })
       .slice(0, n);
   }
@@ -1405,6 +1416,7 @@
         // Classement
         '<div class="srn-sec" id="tab-ranking">',
           '<div class="srn-per">',
+            '<button class="srn-pbtn" data-period="daily">Jour</button>',
             '<button class="srn-pbtn active" data-period="weekly">Semaine</button>',
             '<button class="srn-pbtn" data-period="monthly">Mois</button>',
             '<button class="srn-pbtn" data-period="allTime">Tout temps</button>',
@@ -1416,7 +1428,13 @@
           '<ul class="srn-rank-list" id="srn-rl"></ul>',
         '</div>',
         // Historique
-        '<div class="srn-sec" id="tab-history"><div id="srn-hl"></div></div>',
+        '<div class="srn-sec" id="tab-history">',
+          '<div style="display:flex;gap:5px;margin-bottom:8px;justify-content:flex-end">',
+            '<button id="srn-hist-usd" style="padding:3px 10px;border-radius:6px;border:1px solid #00d4ff;background:#00d4ff22;color:#00d4ff;cursor:pointer;font-size:11px;font-weight:700">$ USD</button>',
+            '<button id="srn-hist-eur" style="padding:3px 10px;border-radius:6px;border:1px solid #1e3a4a;background:transparent;color:#8899aa;cursor:pointer;font-size:11px;font-weight:700">€ EUR</button>',
+          '</div>',
+          '<div id="srn-hl"></div>',
+        '</div>',
         // Messages
         '<div class="srn-sec" id="tab-messages">',
           '<div style="display:flex;gap:5px;margin-bottom:10px">',
@@ -1428,7 +1446,20 @@
           '<div id="srn-msg-empty" style="display:none" class="srn-empty">Aucun message.</div>',
         '</div>',
         // Mes Stats
-        '<div class="srn-sec" id="tab-mystats"><div id="srn-mystats-content"></div></div>',
+        '<div class="srn-sec" id="tab-mystats">',
+          '<div style="display:flex;gap:5px;margin-bottom:8px;justify-content:space-between;align-items:center">',
+            '<div style="display:flex;gap:5px">',
+              '<button id="srn-my-usd" style="padding:3px 10px;border-radius:6px;border:1px solid #00d4ff;background:#00d4ff22;color:#00d4ff;cursor:pointer;font-size:11px;font-weight:700">$ USD</button>',
+              '<button id="srn-my-eur" style="padding:3px 10px;border-radius:6px;border:1px solid #1e3a4a;background:transparent;color:#8899aa;cursor:pointer;font-size:11px;font-weight:700">€ EUR</button>',
+            '</div>',
+            '<div style="display:flex;align-items:center;gap:4px">',
+              '<span style="color:#8899aa;font-size:11px">Objectif :</span>',
+              '<input type="number" id="srn-goal-input" style="width:70px;background:#162330;border:1px solid #1e3a4a;border-radius:6px;color:#fff;padding:3px 6px;font-size:11px" />',
+              '<button id="srn-goal-save" style="padding:3px 8px;border-radius:6px;border:1px solid #00d4ff55;background:#00d4ff11;color:#00d4ff;cursor:pointer;font-size:11px">OK</button>',
+            '</div>',
+          '</div>',
+          '<div id="srn-mystats-content"></div>',
+        '</div>',
         // Mots
         '<div class="srn-sec" id="tab-moderation">',
           '<div class="srn-per" id="srn-word-per">',
@@ -1460,6 +1491,10 @@
         '</div>',
         // Rainers
         '<div class="srn-sec" id="tab-rainers">',
+          '<div style="display:flex;gap:5px;margin-bottom:8px;justify-content:flex-end">',
+            '<button id="srn-rain-usd" style="padding:3px 10px;border-radius:6px;border:1px solid #00d4ff;background:#00d4ff22;color:#00d4ff;cursor:pointer;font-size:11px;font-weight:700">$ USD</button>',
+            '<button id="srn-rain-eur" style="padding:3px 10px;border-radius:6px;border:1px solid #1e3a4a;background:transparent;color:#8899aa;cursor:pointer;font-size:11px;font-weight:700">€ EUR</button>',
+          '</div>',
           '<div class="srn-per">',
             '<button class="srn-pbtn active" data-rainperiod="week">Semaine</button>',
             '<button class="srn-pbtn" data-rainperiod="month">Mois</button>',
@@ -2021,6 +2056,18 @@
   function renderHistory() {
     var el = document.getElementById('srn-hl');
     if (!el) return;
+
+    // Toggle histoire
+    var hUsd = document.getElementById('srn-hist-usd');
+    var hEur = document.getElementById('srn-hist-eur');
+    function applyHistStyle(cur) {
+      if (hUsd) { hUsd.style.background = cur==='usd'?'#00d4ff22':'transparent'; hUsd.style.borderColor = cur==='usd'?'#00d4ff':'#1e3a4a'; hUsd.style.color = cur==='usd'?'#00d4ff':'#8899aa'; }
+      if (hEur) { hEur.style.background = cur==='eur'?'#00d4ff22':'transparent'; hEur.style.borderColor = cur==='eur'?'#00d4ff':'#1e3a4a'; hEur.style.color = cur==='eur'?'#00d4ff':'#8899aa'; }
+    }
+    if (hUsd && !hUsd._l) { hUsd._l = true; hUsd.addEventListener('click', function() { save(SK_CURRENCY, 'usd'); applyHistStyle('usd'); renderHistory(); }); }
+    if (hEur && !hEur._l) { hEur._l = true; hEur.addEventListener('click', function() { save(SK_CURRENCY, 'eur'); applyHistStyle('eur'); renderHistory(); }); }
+    applyHistStyle(load(SK_CURRENCY, 'usd'));
+
     var log = load(SK.RAIN_LOG, []);
     var recent = log.slice(-10).reverse();
     if (!recent.length) { el.innerHTML = '<div class="srn-empty">Aucune rain.</div>'; return; }
@@ -2063,6 +2110,30 @@
     var offset = load(SK_MYSTATS_OFFSET, { month: 0, monthCount: 0, allTime: 0, allTimeCount: 0, week: 0 });
     var el = document.getElementById('srn-mystats-content');
     if (!el) return;
+
+    // Toggle mes stats
+    var mUsd = document.getElementById('srn-my-usd');
+    var mEur = document.getElementById('srn-my-eur');
+    function applyMyStyle(cur) {
+      if (mUsd) { mUsd.style.background = cur==='usd'?'#00d4ff22':'transparent'; mUsd.style.borderColor = cur==='usd'?'#00d4ff':'#1e3a4a'; mUsd.style.color = cur==='usd'?'#00d4ff':'#8899aa'; }
+      if (mEur) { mEur.style.background = cur==='eur'?'#00d4ff22':'transparent'; mEur.style.borderColor = cur==='eur'?'#00d4ff':'#1e3a4a'; mEur.style.color = cur==='eur'?'#00d4ff':'#8899aa'; }
+    }
+    if (mUsd && !mUsd._l) { mUsd._l = true; mUsd.addEventListener('click', function() { save(SK_CURRENCY, 'usd'); applyMyStyle('usd'); renderMyStats(); }); }
+    if (mEur && !mEur._l) { mEur._l = true; mEur.addEventListener('click', function() { save(SK_CURRENCY, 'eur'); applyMyStyle('eur'); renderMyStats(); }); }
+    applyMyStyle(load(SK_CURRENCY, 'usd'));
+
+    // Objectif paramétrable
+    var goalInput = document.getElementById('srn-goal-input');
+    var goalSave  = document.getElementById('srn-goal-save');
+    var savedGoal = load('srn_weekly_goal', 300);
+    if (goalInput && !goalInput._l) {
+      goalInput._l = true;
+      goalInput.value = savedGoal;
+      if (goalSave) goalSave.addEventListener('click', function() {
+        var v = parseFloat(goalInput.value);
+        if (!isNaN(v) && v > 0) { save('srn_weekly_goal', v); renderMyStats(); }
+      });
+    }
     var log = load(SK.RAIN_LOG, []);
     var me = (CONFIG.YOUR_USERNAME || '').toLowerCase();
     var myRains = log.filter(function(e) {
@@ -2093,7 +2164,8 @@
     Object.keys(weekMap).forEach(function(k) {
       if (weekMap[k].total > bestWeek) { bestWeek = weekMap[k].total; var d = weekMap[k].start; bestWeekLabel = d.getDate() + '/' + (d.getMonth()+1); }
     });
-    var pct = Math.min(100, Math.round((weekTotal / WEEKLY_GOAL) * 100));
+    var WEEKLY_GOAL_DYN = load('srn_weekly_goal', 300);
+    var pct = Math.min(100, Math.round((weekTotal / WEEKLY_GOAL_DYN) * 100));
     var pctColor = pct >= 100 ? '#00ff88' : pct >= 50 ? '#00d4ff' : '#8899aa';
     var weeks = [];
     for (var i = 7; i >= 0; i--) {
@@ -2116,7 +2188,7 @@
       '<div class="srn-stat-card">',
         '<div style="display:flex;justify-content:space-between"><span style="color:#fff;font-size:16px;font-weight:800">' + weekTotal.toFixed(2) + symM + '</span><span style="color:' + pctColor + ';font-weight:700">' + pct + '%</span></div>',
         '<div class="srn-progress-bar"><div class="srn-progress-fill" style="width:' + pct + '%"></div></div>',
-        '<div style="color:#8899aa;font-size:10px">Objectif : ' + WEEKLY_GOAL + symM + ' - Reste : ' + Math.max(0, WEEKLY_GOAL - weekTotal).toFixed(2) + symM + '</div>',
+        '<div style="color:#8899aa;font-size:10px">Objectif : ' + WEEKLY_GOAL_DYN + symM + ' - Reste : ' + Math.max(0, WEEKLY_GOAL_DYN - weekTotal).toFixed(2) + symM + '</div>',
       '</div>',
       '<div class="srn-sec-title">Mes statistiques</div>',
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">',
@@ -2729,7 +2801,7 @@
     if (curTab === 'crypto' && document.getElementById('tab-crypto') && document.getElementById('tab-crypto').classList.contains('active')) renderCrypto();
   }, 60000);
   // Verification des mises a jour
-  var CURRENT_VERSION = '1.2.5'; // Doit correspondre a @version
+  var CURRENT_VERSION = '1.2.6'; // Doit correspondre a @version
   var RAW_URL = 'https://raw.githubusercontent.com/tarteteambrumaire-debug/stake-rain-notifier/main/stake-rain-notifier.user.js';
   function checkForUpdate() {
     GM_xmlhttpRequest({
@@ -3024,14 +3096,30 @@
   function renderRainers() {
     var el = document.getElementById('srn-rainers-list');
     if (!el) return;
+
+    // Toggle rainers
+    var rUsd = document.getElementById('srn-rain-usd');
+    var rEur = document.getElementById('srn-rain-eur');
+    function applyRainStyle(cur) {
+      if (rUsd) { rUsd.style.background = cur==='usd'?'#00d4ff22':'transparent'; rUsd.style.borderColor = cur==='usd'?'#00d4ff':'#1e3a4a'; rUsd.style.color = cur==='usd'?'#00d4ff':'#8899aa'; }
+      if (rEur) { rEur.style.background = cur==='eur'?'#00d4ff22':'transparent'; rEur.style.borderColor = cur==='eur'?'#00d4ff':'#1e3a4a'; rEur.style.color = cur==='eur'?'#00d4ff':'#8899aa'; }
+    }
+    if (rUsd && !rUsd._l) { rUsd._l = true; rUsd.addEventListener('click', function() { save(SK_CURRENCY, 'usd'); applyRainStyle('usd'); renderRainers(); }); }
+    if (rEur && !rEur._l) { rEur._l = true; rEur.addEventListener('click', function() { save(SK_CURRENCY, 'eur'); applyRainStyle('eur'); renderRainers(); }); }
+    var curPrefR = load(SK_CURRENCY, 'usd');
+    applyRainStyle(curPrefR);
+
     var log = load(SK_RAINERS, []);
     var startTs = rainPeriod === 'week' ? getWeekStart(new Date()).getTime() : rainPeriod === 'month' ? getMonthStart(new Date()).getTime() : 0;
     var filtered = log.filter(function(e) { return e.ts >= startTs; });
     var senders = {};
     filtered.forEach(function(e) {
       var s = e.sender || 'Inconnu';
-      if (!senders[s]) senders[s] = { count: 0, total: 0, currency: e.currency };
-      senders[s].count++; senders[s].total += (e.amount || 0);
+      if (!senders[s]) senders[s] = { count: 0, total: 0, totalUsd: 0, totalEur: 0, currency: e.currency };
+      senders[s].count++;
+      senders[s].total    += (e.amount || 0);
+      senders[s].totalUsd += (e.usdTotal ? parseFloat(e.usdTotal) : 0);
+      senders[s].totalEur += (e.eurTotal ? parseFloat(e.eurTotal) : 0);
     });
     var sorted = Object.entries(senders).sort(function(a, b) { return b[1].total - a[1].total || b[1].count - a[1].count; }).slice(0, 10);
     if (!sorted.length) { el.innerHTML = '<div class="srn-empty">Aucune rain pour cette periode.</div>'; return; }
@@ -3039,7 +3127,11 @@
     el.innerHTML = '<ul style="list-style:none;margin:0;padding:0">' + sorted.map(function(e, i) {
       var name = e[0], data = e[1];
       var pos = medals[i] || (i+1) + '.';
-      var amt = data.total > 0 ? '<span style="color:#00d4ff;font-weight:700;font-size:11px;background:#00d4ff11;border-radius:6px;padding:2px 6px">' + data.total.toFixed(2) + (data.currency || '') + '</span>' : '';
+      var amtStr = '';
+      if (curPrefR === 'eur' && data.totalEur > 0) amtStr = '€' + data.totalEur.toFixed(2);
+      else if (curPrefR === 'usd' && data.totalUsd > 0) amtStr = '$' + data.totalUsd.toFixed(2);
+      else if (data.total > 0) amtStr = data.total.toFixed(4) + ' ' + (data.currency || '');
+      var amt = amtStr ? '<span style="color:#00d4ff;font-weight:700;font-size:11px;background:#00d4ff11;border-radius:6px;padding:2px 6px">' + amtStr + '</span>' : '';
       return '<li style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid #1e3a4a22;font-size:12px">'
         + '<span style="min-width:22px;font-weight:700;font-size:11px">' + pos + '</span>'
         + '<span style="flex:1;color:#cdd9e5;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escHtml(name) + '</span>'
